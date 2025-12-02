@@ -49,7 +49,7 @@ from .tracking_utils import (
     plot_tracks
 )
 
-class KTRtracker:
+class ImageAnalyzer:
     def __init__(self, filepath):
         """
         Image analysis workflow management
