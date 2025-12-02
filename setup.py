@@ -12,10 +12,11 @@ setup(
         'tifffile',
         'scikit-image',
         'cellpose',
+        'scipy'
     ],
     extras_require={
         'napari': ['napari'],
-        'dev': ['pytest', 'black', 'isort']
+        'dev': ['pytest']
     },
     author="Yuhei Goto",
     author_email="goto.yuhei.4c@kyoto-u.ac.jp",
