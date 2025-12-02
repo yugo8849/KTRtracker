@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 import matplotlib.animation as animation
 from skimage import morphology, measure
+import tifffile
 
 def create_black_background_colormap():
     """
