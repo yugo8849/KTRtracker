@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "KTRtracker"
+version = "0.1.0"
+description = "A comprehensive image analysis and tracking package"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "seaborn",
+    "tifffile",
+    "scikit-image",
+    "cellpose",
+]
+
+[project.optional-dependencies]
+napari = ["napari"]
+dev = ["pytest", "black", "isort"]
+
+[project.urls]
+Homepage = "https://github.com/yourusername/KTRtracker"
