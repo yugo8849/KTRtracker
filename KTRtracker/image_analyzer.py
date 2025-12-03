@@ -201,6 +201,7 @@ class ImageAnalyzer:
     def extract_intensity_features(self):
         """
         Extract intensity features from nuclear and cytoplasmic labels
+        using only the filtered tracking results
         
         Returns:
         --------
@@ -209,14 +210,20 @@ class ImageAnalyzer:
         """
         if (self.segmentation_labels is None or 
             self.cytoplasmic_rings is None or 
-            self.original_images is None):
-            raise ValueError("Segmentation and cytoplasmic rings not generated. Call segment_nuclei() and generate_cytoplasmic_rings() first.")
+            self.original_images is None or
+            self.tracking_df is None):
+            raise ValueError("Segmentation, cytoplasmic rings, images, or tracking not performed.")
         
-        return extract_intensity_features(
+        df = extract_intensity_features(
             self.segmentation_labels, 
             self.cytoplasmic_rings, 
             self.original_images
         )
+        
+        filtered_labels = self.tracking_df['label'].unique()
+        df_filtered = df[df['label'].isin(filtered_labels)]
+        
+        return df_filtered
     
     def visualize_cn_ratio(self, intensity_features=None):
         """
