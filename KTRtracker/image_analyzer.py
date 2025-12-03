@@ -170,7 +170,7 @@ class ImageAnalyzer:
         )
         
         self.tracking_df = tracker.track(self.segmentation_labels)
-        self.tracking_df = tracker.filter_tracks(self, self.tracking_df)
+        self.tracking_df = tracker.filter_tracks(self.tracking_df)
         
         return self
     
