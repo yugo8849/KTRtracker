@@ -50,7 +50,7 @@ from .tracking_utils import (
 )
 
 class ImageAnalyzer:
-    def __init__(self, filepath):
+    def __init__(self, filepath, min_track_length=3, max_linking_distance=15):
         """
         Image analysis workflow management
         
