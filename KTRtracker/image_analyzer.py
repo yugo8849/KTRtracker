@@ -235,7 +235,7 @@ class ImageAnalyzer:
     def visualize_cn_ratio_timelapse(
         self, 
         intensity_features=None, 
-        save_path='/mnt/user-data/outputs/cn_ratio_timelapse.gif', 
+        save_path='cn_ratio_timelapse.gif', 
         **kwargs
     ):
         """
