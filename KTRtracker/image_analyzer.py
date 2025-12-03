@@ -175,28 +175,28 @@ class ImageAnalyzer:
         )
         return self
     
- def generate_cytoplasmic_rings(self, ring_width=2):
-        """
-        Generate cytoplasmic rings from nuclear labels
-        
-        Parameters:
-        -----------
-        ring_width : int, optional
-            Width of the cytoplasmic ring
-        
-        Returns:
-        --------
-        self : ImageAnalyzer
-            Returns self for method chaining
-        """
-        if self.tracked_labels is None:
-            raise ValueError("Nuclear segmentation not performed. Call segment_nuclei() first.")
-        
-        self.cytoplasmic_rings = generate_cytoplasmic_ring(
-            self.tracked_labels, 
-            ring_width=ring_width
-        )
-        return self
+    def generate_cytoplasmic_rings(self, ring_width=2):
+            """
+            Generate cytoplasmic rings from nuclear labels
+            
+            Parameters:
+            -----------
+            ring_width : int, optional
+                Width of the cytoplasmic ring
+            
+            Returns:
+            --------
+            self : ImageAnalyzer
+                Returns self for method chaining
+            """
+            if self.tracked_labels is None:
+                raise ValueError("Nuclear segmentation not performed. Call segment_nuclei() first.")
+            
+            self.cytoplasmic_rings = generate_cytoplasmic_ring(
+                self.tracked_labels, 
+                ring_width=ring_width
+            )
+            return self
 
     def extract_intensity_features(self):
         """
