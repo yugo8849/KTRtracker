@@ -118,29 +118,6 @@ class ImageAnalyzer:
         )
         return self
     
-    def generate_cytoplasmic_rings(self, ring_width=2):
-        """
-        Generate cytoplasmic rings from nuclear labels
-        
-        Parameters:
-        -----------
-        ring_width : int, optional
-            Width of the cytoplasmic ring
-        
-        Returns:
-        --------
-        self : ImageAnalyzer
-            Returns self for method chaining
-        """
-        if self.segmentation_labels is None:
-            raise ValueError("Nuclear segmentation not performed. Call segment_nuclei() first.")
-        
-        self.cytoplasmic_rings = generate_cytoplasmic_ring(
-            self.segmentation_labels, 
-            ring_width=ring_width
-        )
-        return self
-    
     def track_objects(self, min_track_length=None, max_linking_distance=None):
         """
         Perform object tracking
@@ -198,42 +175,48 @@ class ImageAnalyzer:
         )
         return self
     
+ def generate_cytoplasmic_rings(self, ring_width=2):
+        """
+        Generate cytoplasmic rings from nuclear labels
+        
+        Parameters:
+        -----------
+        ring_width : int, optional
+            Width of the cytoplasmic ring
+        
+        Returns:
+        --------
+        self : ImageAnalyzer
+            Returns self for method chaining
+        """
+        if self.tracked_labels is None:
+            raise ValueError("Nuclear segmentation not performed. Call segment_nuclei() first.")
+        
+        self.cytoplasmic_rings = generate_cytoplasmic_ring(
+            self.tracked_labels, 
+            ring_width=ring_width
+        )
+        return self
+
     def extract_intensity_features(self):
         """
         Extract intensity features from nuclear and cytoplasmic labels
-        using only the filtered tracking results
         
         Returns:
         --------
         DataFrame
             Intensity features for each cell and timepoint
         """
-        if (self.segmentation_labels is None or 
+        if (self.tracked_labels is None or 
             self.cytoplasmic_rings is None or 
-            self.original_images is None or
-            self.tracking_df is None):
-            raise ValueError("Segmentation, cytoplasmic rings, images, or tracking not performed.")
+            self.original_images is None):
+            raise ValueError("Segmentation and cytoplasmic rings not generated. Call segment_nuclei() and generate_cytoplasmic_rings() first.")
         
-        # 全ての強度特徴量を抽出
-        df = extract_intensity_features(
-            self.segmentation_labels, 
+        return extract_intensity_features(
+            self.tracked_labels, 
             self.cytoplasmic_rings, 
             self.original_images
         )
-        
-        # トラッキングの結果でフィルタリング
-        filtered_labels = self.tracking_df['label'].unique()
-        df_filtered = df[df['label'].isin(filtered_labels)].copy()
-        
-        # トラック情報を追加（time列を使用）
-        df_filtered = df_filtered.merge(
-            self.tracking_df[['label', 'track_id', 'time']], 
-            left_on=['label', 'time'], 
-            right_on=['label', 'time'], 
-            how='left'
-        )
-        
-        return df_filtered
     
     def visualize_cn_ratio(self, intensity_features=None):
         """
