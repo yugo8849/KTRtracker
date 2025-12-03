@@ -219,9 +219,15 @@ class ImageAnalyzer:
             self.cytoplasmic_rings, 
             self.original_images
         )
-        
+
         filtered_labels = self.tracking_df['label'].unique()
-        df_filtered = df[df['label'].isin(filtered_labels)]
+        df_filtered = df[df['label'].isin(filtered_labels)].copy()
+        
+        df_filtered = df_filtered.merge(
+            self.tracking_df[['label', 'track_id', 'frame']], 
+            on=['label', 'frame'], 
+            how='left'
+        )
         
         return df_filtered
     
