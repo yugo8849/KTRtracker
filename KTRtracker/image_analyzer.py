@@ -261,7 +261,7 @@ class ImageAnalyzer:
         intensity_features = intensity_features.rename(columns={'C/N': 'CN_ratio'})
         
         visualize_cn_ratio_timelapse(
-            label_nuc_series=self.segmentation_labels,
+            label_nuc_series=self.tracked_labels,
             df=intensity_features,
             save_path=save_path,
             time_column='Time',
