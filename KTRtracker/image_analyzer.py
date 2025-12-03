@@ -214,18 +214,21 @@ class ImageAnalyzer:
             self.tracking_df is None):
             raise ValueError("Segmentation, cytoplasmic rings, images, or tracking not performed.")
         
+        # 全ての強度特徴量を抽出
         df = extract_intensity_features(
             self.segmentation_labels, 
             self.cytoplasmic_rings, 
             self.original_images
         )
-
+        
+        # トラッキングの結果でフィルタリング
         filtered_labels = self.tracking_df['label'].unique()
         df_filtered = df[df['label'].isin(filtered_labels)].copy()
         
+        # トラック情報を追加（frame → timeに変更）
         df_filtered = df_filtered.merge(
-            self.tracking_df[['label', 'track_id', 'frame']], 
-            on=['label', 'frame'], 
+            self.tracking_df[['label', 'track_id', 'time']], 
+            on=['label', 'time'], 
             how='left'
         )
         
