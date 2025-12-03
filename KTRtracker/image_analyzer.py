@@ -221,16 +221,22 @@ class ImageAnalyzer:
             self.original_images
         )
         
+        # DataFrameの列名を確認
+        print("Original DataFrame columns:", df.columns)
+        print("Tracking DataFrame columns:", self.tracking_df.columns)
+        
         # トラッキングの結果でフィルタリング
         filtered_labels = self.tracking_df['label'].unique()
         df_filtered = df[df['label'].isin(filtered_labels)].copy()
         
-        # トラック情報を追加（frame → timeに変更）
-        df_filtered = df_filtered.merge(
-            self.tracking_df[['label', 'track_id', 'time']], 
-            on=['label', 'time'], 
-            how='left'
-        )
+        # トラック情報を追加（列名を動的に調整）
+        common_column = 'frame'  # または必要に応じて変更
+        if common_column not in df_filtered.columns and common_column in self.tracking_df.columns:
+            df_filtered = df_filtered.merge(
+                self.tracking_df[['label', 'track_id', common_column]], 
+                on=['label', common_column], 
+                how='left'
+            )
         
         return df_filtered
     
