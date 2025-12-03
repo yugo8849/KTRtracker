@@ -65,6 +65,10 @@ class ImageAnalyzer:
         self.cytoplasmic_rings = None
         self.tracking_df = None
         self.tracked_labels = None
+
+        # Tracking parameters
+        self.min_track_length = min_track_length
+        self.max_linking_distance = max_linking_distance
         
     def load_image(self):
         """
@@ -137,16 +141,16 @@ class ImageAnalyzer:
         )
         return self
     
-    def track_objects(self, max_linking_distance=15, min_track_length=3):
+    def track_objects(self, min_track_length=None, max_linking_distance=None):
         """
         Perform object tracking
         
         Parameters:
         -----------
-        max_linking_distance : float, optional
-            Maximum distance for object linking
         min_track_length : int, optional
-            Minimum track length to consider
+            Override the default min_track_length
+        max_linking_distance : float, optional
+            Override the default max_linking_distance
         
         Returns:
         --------
@@ -156,9 +160,13 @@ class ImageAnalyzer:
         if self.segmentation_labels is None:
             raise ValueError("Nuclear segmentation not performed. Call segment_nuclei() first.")
         
+        # Use provided parameters or fall back to instance parameters
+        track_length = min_track_length if min_track_length is not None else self.min_track_length
+        link_distance = max_linking_distance if max_linking_distance is not None else self.max_linking_distance
+        
         tracker = SimpleLAPTracker(
-            max_linking_distance=max_linking_distance, 
-            min_track_length=min_track_length
+            max_linking_distance=link_distance, 
+            min_track_length=track_length
         )
         
         self.tracking_df = tracker.track(self.segmentation_labels)
@@ -245,45 +253,19 @@ class ImageAnalyzer:
         if intensity_features is None:
             intensity_features = self.extract_intensity_features()
         
+        # Add a time column if not present
+        if 'Time' not in intensity_features.columns:
+            intensity_features['Time'] = intensity_features.groupby('label').cumcount()
+        
+        # Rename 'C/N' column to match the function's expectation
+        intensity_features = intensity_features.rename(columns={'C/N': 'CN_ratio'})
+        
         visualize_cn_ratio_timelapse(
             label_nuc_series=self.segmentation_labels,
             df=intensity_features,
             save_path=save_path,
-            **kwargs
-        )
-    
-    def analyze_tracks(self):
-        """
-        Analyze tracking results
-        
-        Returns:
-        --------
-        DataFrame
-            Track statistics
-        """
-        if self.tracking_df is None:
-            raise ValueError("Tracking not performed. Call track_objects() first.")
-        
-        return analyze_tracks(self.tracking_df)
-    
-    def plot_tracks(self, frame_to_show=0, **kwargs):
-        """
-        Plot tracking results
-        
-        Parameters:
-        -----------
-        frame_to_show : int, optional
-            Frame number to visualize
-        **kwargs : dict
-            Additional arguments for plot_tracks function
-        """
-        if self.segmentation_labels is None or self.tracking_df is None:
-            raise ValueError("Tracking not performed. Call track_objects() first.")
-        
-        plot_tracks(
-            self.tracking_df, 
-            self.segmentation_labels, 
-            frame_to_show=frame_to_show, 
+            time_column='Time',
+            cn_ratio_column='CN_ratio',
             **kwargs
         )
 
