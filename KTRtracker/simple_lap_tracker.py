@@ -1,16 +1,6 @@
 """
-Simple LAP Tracker
-==================
-Implementation of ImageJ Trackmate Simple LAP tracker for Python
-
-Main Classes:
-    SimpleLAPTracker: Main Class of LAP tracker
-
-Functions:
-    extract_objects_from_labels: Extract objects from labeled images created by cellpose or smothing
-
-Author: Yuhei Goto
-Date: 2025/11/25
+Simple LAP Tracker with Gap Closing
+Python implementation equivalent to ImageJ Trackmate Simple LAP tracker
 """
 
 import numpy as np
@@ -21,19 +11,19 @@ from skimage import measure
 
 def extract_objects_from_labels(label_image, frame_number):
     """
-    Extract objects from labeled images created by cellpose or smothing
+    Extract object features from a labeled image
     
     Parameters
     ----------
     label_image : ndarray
-        labeled 2D images
+        2D labeled image where each object has a unique label number
     frame_number : int
-        frame number
+        Frame number
     
     Returns
     -------
     df : DataFrame
-        Dataframe including the chracteristics of each labeled images
+        DataFrame containing features of each object
     """
     props = measure.regionprops(label_image)
     
@@ -45,8 +35,6 @@ def extract_objects_from_labels(label_image, frame_number):
             'y': prop.centroid[0],
             'x': prop.centroid[1],
             'area': prop.area,
-            'perimeter': prop.perimeter,
-            'eccentricity': prop.eccentricity
         })
     
     return pd.DataFrame(data)
@@ -55,34 +43,23 @@ def extract_objects_from_labels(label_image, frame_number):
 class SimpleLAPTracker:
     """
     Simple LAP (Linear Assignment Problem) Tracker
-    
-    Parameters
-    ----------
-    max_linking_distance : float, default=15
-        Maximum distance between two successive images (pixel)
-    max_gap_closing : int, default=2
-        Maximum frame for gap closing（not implemented yet）
-    max_gap_distance : float, default=15
-        Maximum distance for gap closing（not implemented yet）
-    min_track_length : int, default=3
-        Varid minimum tracking frame numbers
-    
-    Attributes
-    ----------
-    tracks : dict
-         {track_id: [spot_dicts]}
-    next_track_id : int
-        next assinged track_id
-    
-    Examples
-    --------
-    >>> tracker = SimpleLAPTracker(max_linking_distance=20, min_track_length=5)
-    >>> results = tracker.track(label_images)
-    >>> filtered = tracker.filter_tracks(results)
+    Python implementation equivalent to ImageJ Trackmate Simple LAP tracker
     """
     
     def __init__(self, max_linking_distance=15, max_gap_closing=2, 
                  max_gap_distance=15, min_track_length=3):
+        """
+        Parameters
+        ----------
+        max_linking_distance : float
+            Maximum distance for linking objects between consecutive frames (pixels)
+        max_gap_closing : int
+            Maximum number of frames for gap closing
+        max_gap_distance : float
+            Maximum distance for gap closing (pixels)
+        min_track_length : int
+            Minimum track length (number of frames)
+        """
         self.max_linking_distance = max_linking_distance
         self.max_gap_closing = max_gap_closing
         self.max_gap_distance = max_gap_distance
@@ -92,17 +69,7 @@ class SimpleLAPTracker:
         
     def calculate_cost_matrix(self, objects1, objects2, max_distance):
         """
-        Calculate cost matrix between two object sets
-        
-        Parameters
-        ----------
-        objects1, objects2 : DataFrame
-        max_distance : float
-        
-        Returns
-        -------
-        cost_matrix : ndarray
-        
+        Calculate cost matrix between two sets of objects
         """
         n1 = len(objects1)
         n2 = len(objects2)
@@ -110,152 +77,470 @@ class SimpleLAPTracker:
         if n1 == 0 or n2 == 0:
             return np.array([]).reshape(n1, n2)
         
-        # calculate the difference of the positions
-        pos1 = objects1[['y', 'x']].values
-        pos2 = objects2[['y', 'x']].values
+        # Initialize cost matrix with large values
+        cost_matrix = np.full((n1, n2), max_distance * 10)
         
-        # calculate the Euclidean distance
-        cost_matrix = np.sqrt(
-            ((pos1[:, np.newaxis, :] - pos2[np.newaxis, :, :]) ** 2).sum(axis=2)
-        )
-        
-        # Large cost if it exceed maximum distance
-        cost_matrix[cost_matrix > max_distance] = 1e10
+        # Calculate Euclidean distance
+        for i, (_, obj1) in enumerate(objects1.iterrows()):
+            for j, (_, obj2) in enumerate(objects2.iterrows()):
+                dist = np.sqrt((obj1['x'] - obj2['x'])**2 + (obj1['y'] - obj2['y'])**2)
+                if dist <= max_distance:
+                    cost_matrix[i, j] = dist
         
         return cost_matrix
     
-    def link_objects(self, prev_objects, curr_objects, prev_track_ids):
-        """
-        Link objects between successive frames
-        
-        Parameters
-        ----------
-        prev_objects : DataFrame
-            
-        curr_objects : DataFrame
-            
-        prev_track_ids : list
-            
-        
-        Returns
-        -------
-        track_ids : list
-            
-        """
-        if len(prev_objects) == 0:
-            # First frame: create new frame
-            track_ids = []
-            for idx, row in curr_objects.iterrows():
-                track_id = self.next_track_id
-                self.tracks[track_id] = [row.to_dict()]
-                track_ids.append(track_id)
-                self.next_track_id += 1
-            return track_ids
-        
-        # Calculate cost matrix
-        cost_matrix = self.calculate_cost_matrix(
-            prev_objects, curr_objects, self.max_linking_distance
-        )
-        
-        track_ids = [None] * len(curr_objects)
-        
-        if cost_matrix.size > 0:
-            # Assign an optimal parameters by Hungarian methods
-            row_ind, col_ind = linear_sum_assignment(cost_matrix)
-            
-            for prev_idx, curr_idx in zip(row_ind, col_ind):
-                if cost_matrix[prev_idx, curr_idx] < 1e10:
-                    # Add to exiting tracks
-                    track_id = prev_track_ids[prev_idx]
-                    curr_row = curr_objects.iloc[curr_idx].to_dict()
-                    self.tracks[track_id].append(curr_row)
-                    track_ids[curr_idx] = track_id
-        
-        # Make new tracks with unassinged objects
-        for idx, (curr_idx, row) in enumerate(curr_objects.iterrows()):
-            if track_ids[idx] is None:
-                track_id = self.next_track_id
-                self.tracks[track_id] = [row.to_dict()]
-                track_ids[idx] = track_id
-                self.next_track_id += 1
-        
-        return track_ids
-    
     def track(self, label_images):
         """
-        Tracking the sequence of labeled images
+        Perform tracking from a list of labeled images
         
         Parameters
         ----------
         label_images : list of ndarray
+            List of labeled images (in chronological order)
         
         Returns
         -------
-        df : DataFrame
-            
+        tracking_df : DataFrame
+            Tracking results
+        """
+        # Extract object information from all frames
+        all_objects = []
+        for frame_idx, label_image in enumerate(label_images):
+            objects = extract_objects_from_labels(label_image, frame_idx)
+            all_objects.append(objects)
+        
+        # Perform tracking
+        return self.link_objects(all_objects)
+    
+    def link_objects(self, all_objects):
+        """
+        Link objects across all frames (frame-to-frame linking)
+        
+        Parameters
+        ----------
+        all_objects : list of DataFrame
+            Object information for each frame
+        
+        Returns
+        -------
+        tracking_df : DataFrame
+            Tracking results
         """
         self.tracks = {}
         self.next_track_id = 0
         
-        prev_objects = pd.DataFrame()
-        prev_track_ids = []
+        if len(all_objects) == 0 or len(all_objects[0]) == 0:
+            return pd.DataFrame()
         
-        all_objects = []
+        # Initialize with objects from the first frame
+        for _, obj in all_objects[0].iterrows():
+            self.tracks[self.next_track_id] = [obj.to_dict()]
+            self.next_track_id += 1
         
-        for frame_num, label_image in enumerate(label_images):
-            # Extract objects
-            curr_objects = extract_objects_from_labels(label_image, frame_num)
+        # Frame-to-frame linking
+        for frame_idx in range(1, len(all_objects)):
+            prev_objects = all_objects[frame_idx - 1]
+            curr_objects = all_objects[frame_idx]
             
-            # Linking
-            track_ids = self.link_objects(prev_objects, curr_objects, prev_track_ids)
+            if len(curr_objects) == 0:
+                continue
             
-            # add track_id
-            curr_objects['track_id'] = track_ids
-            all_objects.append(curr_objects)
+            if len(prev_objects) == 0:
+                # No objects in previous frame, start new tracks
+                for _, obj in curr_objects.iterrows():
+                    self.tracks[self.next_track_id] = [obj.to_dict()]
+                    self.next_track_id += 1
+                continue
             
-            # Save for next iteration
-            prev_objects = curr_objects
-            prev_track_ids = track_ids
+            # Calculate cost matrix
+            cost_matrix = self.calculate_cost_matrix(
+                prev_objects, curr_objects, self.max_linking_distance
+            )
+            
+            # Optimal assignment using Hungarian algorithm
+            row_ind, col_ind = linear_sum_assignment(cost_matrix)
+            
+            # Record linked objects in current frame
+            linked_curr = set()
+            
+            # Process assignment results
+            for i, j in zip(row_ind, col_ind):
+                if cost_matrix[i, j] <= self.max_linking_distance:
+                    # Valid link - add to existing track
+                    prev_obj = prev_objects.iloc[i]
+                    curr_obj = curr_objects.iloc[j]
+                    
+                    # Find the track this object belongs to
+                    for track_id, track in self.tracks.items():
+                        if (track[-1]['frame'] == prev_obj['frame'] and 
+                            track[-1]['label'] == prev_obj['label']):
+                            track.append(curr_obj.to_dict())
+                            linked_curr.add(j)
+                            break
+            
+            # Unlinked objects in current frame start new tracks
+            for j, (_, obj) in enumerate(curr_objects.iterrows()):
+                if j not in linked_curr:
+                    self.tracks[self.next_track_id] = [obj.to_dict()]
+                    self.next_track_id += 1
         
-        return pd.concat(all_objects, ignore_index=True)
+        # Convert tracking results to DataFrame
+        return self._tracks_to_dataframe()
     
-    def get_tracks_dict(self):
-        """
+    def _tracks_to_dataframe(self):
+        """Convert tracks dictionary to DataFrame"""
+        data = []
+        for track_id, track in self.tracks.items():
+            for spot in track:
+                row = spot.copy()
+                row['track_id'] = track_id
+                data.append(row)
         
-        Returns
-        -------
-        tracks : dict
-            {track_id: [spot_dicts]} 
-        """
-        return self.tracks
+        if len(data) == 0:
+            return pd.DataFrame()
+        
+        df = pd.DataFrame(data)
+        return df.sort_values(['track_id', 'frame']).reset_index(drop=True)
     
-    def filter_tracks(self, df, verbose=True):
+    def gap_closing(self, tracking_df, max_gap_frames=None, max_gap_distance=None):
         """
-        Remove shorter tracks
+        Gap closing: Reconnect broken tracks
+        
+        Reconnects tracks that were broken during initial frame-to-frame linking
+        based on distance and frame gap between track endpoints.
         
         Parameters
         ----------
-        df : DataFrame
-            tracking results
-        verbose : bool, default=True
+        tracking_df : pandas.DataFrame
+            Initial tracking results (output from track())
+        max_gap_frames : int, optional
+            Maximum number of frames to bridge (default: self.max_gap_closing)
+        max_gap_distance : float, optional
+            Maximum distance for gap closing (default: self.max_gap_distance)
         
         Returns
         -------
-        df_filtered : DataFrame
-        
+        updated_tracking_df : pandas.DataFrame
+            Tracking results with gap closing applied
         """
-        # Calculate the length of each tracks
-        track_lengths = df.groupby('track_id').size()
+        if max_gap_frames is None:
+            max_gap_frames = self.max_gap_closing
+        if max_gap_distance is None:
+            max_gap_distance = self.max_gap_distance
         
-        # get the valid track numbers
-        valid_tracks = track_lengths[track_lengths >= self.min_track_length].index
+        if tracking_df.empty:
+            return tracking_df
         
-        # filtering
-        df_filtered = df[df['track_id'].isin(valid_tracks)].copy()
+        df = tracking_df.copy()
         
-        if verbose:
-            print(f"All tracks: {len(track_lengths)}")
-            print(f"filtered tracks: {len(valid_tracks)}")
-            print(f"removed tracks: {len(track_lengths) - len(valid_tracks)}")
+        # Get endpoints of each track
+        track_endpoints = self._get_track_endpoints(df)
         
-        return df_filtered
+        # Build cost matrix for gap closing
+        # Rows: track endpoints, Columns: track start points
+        track_ids = list(track_endpoints.keys())
+        n_tracks = len(track_ids)
+        
+        if n_tracks <= 1:
+            return df
+        
+        # Build cost matrix (from endpoints to start points)
+        cost_matrix = np.full((n_tracks, n_tracks), np.inf)
+        
+        for i, track_i in enumerate(track_ids):
+            end_info = track_endpoints[track_i]['end']
+            end_frame = end_info['frame']
+            end_x = end_info['x']
+            end_y = end_info['y']
+            
+            for j, track_j in enumerate(track_ids):
+                if track_i == track_j:
+                    continue  # Skip same track
+                
+                start_info = track_endpoints[track_j]['start']
+                start_frame = start_info['frame']
+                start_x = start_info['x']
+                start_y = start_info['y']
+                
+                # Check frame gap (track_i endpoint must be before track_j start point)
+                frame_gap = start_frame - end_frame - 1
+                
+                if frame_gap < 1 or frame_gap > max_gap_frames:
+                    continue  # Invalid gap
+                
+                # Calculate distance
+                dist = np.sqrt((end_x - start_x)**2 + (end_y - start_y)**2)
+                
+                if dist <= max_gap_distance:
+                    # Include frame gap in cost
+                    cost_matrix[i, j] = dist * (1 + 0.1 * frame_gap)
+        
+        # Find pairs to merge (greedy approach)
+        merge_pairs = self._find_gap_closing_pairs(cost_matrix, track_ids)
+        
+        # Merge tracks
+        df = self._merge_tracks(df, merge_pairs, track_endpoints, max_gap_frames)
+        
+        return df.sort_values(['track_id', 'frame']).reset_index(drop=True)
+    
+    def _get_track_endpoints(self, df):
+        """Get start and end point information for each track"""
+        endpoints = {}
+        
+        for track_id in df['track_id'].unique():
+            track = df[df['track_id'] == track_id].sort_values('frame')
+            
+            first = track.iloc[0]
+            last = track.iloc[-1]
+            
+            endpoints[track_id] = {
+                'start': {
+                    'frame': first['frame'],
+                    'x': first['x'],
+                    'y': first['y'],
+                    'label': first['label']
+                },
+                'end': {
+                    'frame': last['frame'],
+                    'x': last['x'],
+                    'y': last['y'],
+                    'label': last['label']
+                }
+            }
+        
+        return endpoints
+    
+    def _find_gap_closing_pairs(self, cost_matrix, track_ids):
+        """
+        Find track pairs to merge for gap closing
+        
+        Uses Hungarian algorithm for optimal matching and returns only valid pairs
+        """
+        n = len(track_ids)
+        
+        # Check if there are any finite costs
+        if not np.any(np.isfinite(cost_matrix)):
+            return []
+        
+        # Create extended cost matrix (add option not to link)
+        # Add option not to link with cost higher than threshold
+        threshold = self.max_gap_distance * 2
+        extended_cost = np.full((n * 2, n * 2), threshold)
+        
+        # Top-left: actual cost matrix
+        extended_cost[:n, :n] = np.where(np.isinf(cost_matrix), threshold, cost_matrix)
+        
+        # Bottom-right: zero cost (for not linking)
+        np.fill_diagonal(extended_cost[n:, n:], 0)
+        
+        # Top-right: cost for not linking
+        np.fill_diagonal(extended_cost[:n, n:], threshold * 0.9)
+        
+        # Bottom-left: cost for not linking
+        np.fill_diagonal(extended_cost[n:, :n], threshold * 0.9)
+        
+        # Solve using Hungarian algorithm
+        row_ind, col_ind = linear_sum_assignment(extended_cost)
+        
+        # Extract valid pairs
+        merge_pairs = []
+        for i, j in zip(row_ind, col_ind):
+            if i < n and j < n and np.isfinite(cost_matrix[i, j]):
+                merge_pairs.append((track_ids[i], track_ids[j]))
+        
+        return merge_pairs
+    
+    def _merge_tracks(self, df, merge_pairs, track_endpoints, max_gap_frames):
+        """
+        Merge tracks and fill gaps with interpolation
+        """
+        if not merge_pairs:
+            return df
+        
+        df = df.copy()
+        
+        # Build mapping for tracks to merge
+        # Merge track_j into track_i
+        merge_map = {}
+        for track_i, track_j in merge_pairs:
+            # Handle chain cases
+            target = track_i
+            while target in merge_map:
+                target = merge_map[target]
+            merge_map[track_j] = target
+        
+        # Store interpolated data
+        interpolated_data = []
+        
+        # Identify numeric columns for interpolation
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        exclude_cols = ['frame', 'track_id', 'label']
+        interp_cols = [c for c in numeric_cols if c not in exclude_cols]
+        
+        for track_i, track_j in merge_pairs:
+            # Merge track_j into track_i
+            target_id = track_i
+            while target_id in merge_map and merge_map[target_id] != target_id:
+                if merge_map[target_id] == target_id:
+                    break
+                target_id = merge_map[target_id]
+            
+            # Get endpoint and start point data
+            track_i_data = df[df['track_id'] == track_i].sort_values('frame')
+            track_j_data = df[df['track_id'] == track_j].sort_values('frame')
+            
+            end_row = track_i_data.iloc[-1]
+            start_row = track_j_data.iloc[0]
+            
+            end_frame = int(end_row['frame'])
+            start_frame = int(start_row['frame'])
+            
+            # Use label from previous segment for interpolated points
+            interp_label = end_row['label']
+            
+            # Interpolate gap frames
+            gap_size = start_frame - end_frame - 1
+            
+            if gap_size > 0 and gap_size <= max_gap_frames:
+                for k in range(1, gap_size + 1):
+                    gap_frame = end_frame + k
+                    # Interpolation weight (0 to 1)
+                    weight = k / (gap_size + 1)
+                    
+                    # Basic data
+                    interp_row = {
+                        'frame': gap_frame,
+                        'label': interp_label,  # Use label from previous segment
+                        'track_id': target_id
+                    }
+                    
+                    # Linear interpolation for all numeric columns
+                    for col in interp_cols:
+                        end_val = end_row[col]
+                        start_val = start_row[col]
+                        if pd.notna(end_val) and pd.notna(start_val):
+                            interp_row[col] = end_val + (start_val - end_val) * weight
+                        else:
+                            interp_row[col] = np.nan
+                    
+                    interpolated_data.append(interp_row)
+            
+            # Update track_id of track_j to target_id
+            df.loc[df['track_id'] == track_j, 'track_id'] = target_id
+        
+        # Add interpolated data
+        if interpolated_data:
+            interp_df = pd.DataFrame(interpolated_data)
+            df = pd.concat([df, interp_df], ignore_index=True)
+        
+        return df
+    
+    def filter_tracks(self, tracking_df, min_length=None):
+        """
+        Filter out short tracks
+        
+        Parameters
+        ----------
+        tracking_df : DataFrame
+            Tracking results
+        min_length : int, optional
+            Minimum track length (default: self.min_track_length)
+        
+        Returns
+        -------
+        filtered_df : DataFrame
+            Filtered tracking results
+        """
+        if min_length is None:
+            min_length = self.min_track_length
+        
+        # Calculate length of each track
+        track_lengths = tracking_df.groupby('track_id').size()
+        
+        # Get track IDs with length >= min_length
+        valid_tracks = track_lengths[track_lengths >= min_length].index
+        
+        # Filter
+        filtered_df = tracking_df[tracking_df['track_id'].isin(valid_tracks)].copy()
+        
+        return filtered_df.reset_index(drop=True)
+
+
+def create_gap_closing_test_data(n_frames=20, n_objects=3, image_size=100, 
+                                  gap_frames=None, seed=42):
+    """
+    Generate labeled images for gap closing testing
+    
+    Parameters
+    ----------
+    n_frames : int
+        Number of frames
+    n_objects : int
+        Number of objects
+    image_size : int
+        Image size
+    gap_frames : dict, optional
+        Frames where each object disappears {obj_id: [frame1, frame2, ...]}
+        If None, gaps are inserted automatically
+    seed : int
+        Random seed
+    
+    Returns
+    -------
+    label_images : list of ndarray
+        List of labeled images
+    ground_truth : dict
+        Ground truth track information
+    """
+    np.random.seed(seed)
+    
+    # Initial positions and velocities of objects
+    positions = np.random.rand(n_objects, 2) * (image_size - 40) + 20
+    velocities = (np.random.rand(n_objects, 2) - 0.5) * 4
+    
+    # Default gap frame settings
+    if gap_frames is None:
+        gap_frames = {
+            0: [7, 8],      # Object 0 disappears at frames 7, 8
+            1: [12],        # Object 1 disappears at frame 12
+            2: [5, 15, 16], # Object 2 disappears at frames 5, 15, 16
+        }
+    
+    label_images = []
+    ground_truth = {i: [] for i in range(n_objects)}
+    
+    for frame in range(n_frames):
+        label_image = np.zeros((image_size, image_size), dtype=np.uint16)
+        
+        for obj_id in range(n_objects):
+            # Check if object disappears at this frame
+            if obj_id in gap_frames and frame in gap_frames[obj_id]:
+                continue
+            
+            # Update position
+            positions[obj_id] += velocities[obj_id]
+            
+            # Reflect at boundaries
+            for dim in range(2):
+                if positions[obj_id, dim] < 15 or positions[obj_id, dim] > image_size - 15:
+                    velocities[obj_id, dim] *= -1
+                    positions[obj_id, dim] = np.clip(positions[obj_id, dim], 15, image_size - 15)
+            
+            # Draw object
+            y, x = int(positions[obj_id, 0]), int(positions[obj_id, 1])
+            radius = 8
+            yy, xx = np.ogrid[:image_size, :image_size]
+            mask = (yy - y)**2 + (xx - x)**2 <= radius**2
+            label_image[mask] = obj_id + 1
+            
+            # Add to ground truth
+            ground_truth[obj_id].append({
+                'frame': frame,
+                'x': x,
+                'y': y,
+                'label': obj_id + 1
+            })
+        
+        label_images.append(label_image)
+    
+    return label_images, ground_truth

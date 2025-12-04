@@ -48,7 +48,7 @@ def create_test_data(n_frames=10, n_objects=5, image_size=512):
     
     # Randamize initial position
     positions = np.random.rand(n_objects, 2) * (image_size - 100) + 50
-    velocities = (np.random.rand(n_objects, 2) - 0.5) * 10  # ランダムな速度
+    velocities = (np.random.rand(n_objects, 2) - 0.5) * 10  # Random velocities
     
     for frame in range(n_frames):
         label_image = np.zeros((image_size, image_size), dtype=np.uint16)
@@ -78,6 +78,7 @@ def create_test_data(n_frames=10, n_objects=5, image_size=512):
 def save_tracking_as_labels(original_labels, tracking_df, output_dir='tracked_labels'):
     """
     Generate the tracked labeled image from original labeled images by swapping objects with track_id
+    Supports interpolated points from gap_closing (draws circles based on area)
     
     Parameters
     ----------
@@ -91,10 +92,13 @@ def save_tracking_as_labels(original_labels, tracking_df, output_dir='tracked_la
     -------
     tracked_labels : list of ndarray
     """
+    from skimage import draw
+    
     # make an output directory
     os.makedirs(output_dir, exist_ok=True)
     
     tracked_labels = []
+    image_shape = original_labels[0].shape
     
     for frame_num in range(len(original_labels)):
         # original labeled images
@@ -111,8 +115,27 @@ def save_tracking_as_labels(original_labels, tracking_df, output_dir='tracked_la
             original_label = int(row['label'])
             track_id = int(row['track_id'])
             
-            # Replcae the pixel intensity corresponding to original ones with track_id
-            tracked[original == original_label] = track_id + 1  
+            # Check if original mask exists
+            original_mask = original == original_label
+            
+            if np.any(original_mask):
+                # Use original mask if exists
+                tracked[original_mask] = track_id + 1
+            else:
+                # Interpolated point: draw circle based on area
+                y, x = int(row['y']), int(row['x'])
+                
+                # Calculate radius from area (area = π * r^2 -> r = sqrt(area / π))
+                area = row.get('area', 317)  # default radius ~10
+                if pd.notna(area) and area > 0:
+                    radius = int(np.sqrt(area / np.pi))
+                else:
+                    radius = 10  # default
+                
+                # Draw circle
+                if 0 <= y < image_shape[0] and 0 <= x < image_shape[1]:
+                    rr, cc = draw.disk((y, x), radius, shape=image_shape)
+                    tracked[rr, cc] = track_id + 1
         
         tracked_labels.append(tracked)
         
@@ -176,7 +199,7 @@ def reconstruct_dataframe_from_labels(edited_labels):
         for prop in props:
             all_data.append({
                 'frame': frame_num,
-                'track_id': prop.label - 1,  # -1は保存時のオフセットを戻す
+                'track_id': prop.label - 1,  # Revert offset applied during saving
                 'label': prop.label,
                 'y': prop.centroid[0],
                 'x': prop.centroid[1],
