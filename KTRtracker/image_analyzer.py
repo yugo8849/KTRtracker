@@ -50,7 +50,7 @@ from .tracking_utils import (
 )
 
 class ImageAnalyzer:
-    def __init__(self, filepath, min_track_length=3, max_linking_distance=15):
+    def __init__(self, filepath, min_track_length=3, max_linking_distance=15, max_gap_frames=2,max_gap_distance=15):
         """
         Image analysis workflow management
         
@@ -69,6 +69,8 @@ class ImageAnalyzer:
         # Tracking parameters
         self.min_track_length = min_track_length
         self.max_linking_distance = max_linking_distance
+        self.max_gap_frames = max_gap_frames
+        self.max_gap_distance = max_gap_distance
         
     def load_image(self):
         """
@@ -140,12 +142,14 @@ class ImageAnalyzer:
         # Use provided parameters or fall back to instance parameters
         track_length = min_track_length if min_track_length is not None else self.min_track_length
         link_distance = max_linking_distance if max_linking_distance is not None else self.max_linking_distance
+        gap_frames = max_gap_frames if max_gap_frames is not None else self.max_gap_frames
+        gap_distance = max_gap_distance if max_gap_distance is not None else self.max_gap_distance
         
         tracker = SimpleLAPTracker(
             max_linking_distance=link_distance, 
             min_track_length=track_length,
-            max_gap_frames=None, 
-            max_gap_distance=None
+            max_gap_frames=gap_frames, 
+            max_gap_distance=gap_distance
         )
         
         self.tracking_df = tracker.track(self.segmentation_labels)
