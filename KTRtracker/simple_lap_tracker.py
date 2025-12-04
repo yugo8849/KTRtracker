@@ -359,6 +359,11 @@ class SimpleLAPTracker:
         
         df = df.copy()
         
+        # Cache track data before any modifications
+        track_data_cache = {}
+        for track_id in df['track_id'].unique():
+            track_data_cache[track_id] = df[df['track_id'] == track_id].sort_values('frame').copy()
+        
         # Build mapping for tracks to merge
         # Merge track_j into track_i
         merge_map = {}
@@ -385,9 +390,15 @@ class SimpleLAPTracker:
                     break
                 target_id = merge_map[target_id]
             
-            # Get endpoint and start point data
-            track_i_data = df[df['track_id'] == track_i].sort_values('frame')
-            track_j_data = df[df['track_id'] == track_j].sort_values('frame')
+            # Get endpoint and start point data from cache
+            track_i_data = track_data_cache.get(track_i)
+            track_j_data = track_data_cache.get(track_j)
+            
+            # Skip if either track data is missing or empty
+            if track_i_data is None or track_j_data is None:
+                continue
+            if len(track_i_data) == 0 or len(track_j_data) == 0:
+                continue
             
             end_row = track_i_data.iloc[-1]
             start_row = track_j_data.iloc[0]
