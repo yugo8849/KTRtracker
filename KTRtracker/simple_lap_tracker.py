@@ -544,3 +544,54 @@ def create_gap_closing_test_data(n_frames=20, n_objects=3, image_size=100,
         label_images.append(label_image)
     
     return label_images, ground_truth
+
+
+# Usage example
+if __name__ == '__main__':
+    # Generate test data
+    print("Generating test data...")
+    label_images, ground_truth = create_gap_closing_test_data(
+        n_frames=20, 
+        n_objects=3,
+        gap_frames={0: [7, 8], 1: [12], 2: [5, 15, 16]}
+    )
+    
+    print(f"Number of frames generated: {len(label_images)}")
+    print(f"Gap frames: Object 0=[7,8], Object 1=[12], Object 2=[5,15,16]")
+    
+    # Initialize tracker
+    tracker = SimpleLAPTracker(
+        max_linking_distance=20,
+        max_gap_closing=3,
+        max_gap_distance=25,
+        min_track_length=3
+    )
+    
+    # Initial tracking
+    print("\n--- Initial Tracking ---")
+    tracking_df = tracker.track(label_images)
+    print(f"Number of tracks: {tracking_df['track_id'].nunique()}")
+    print(f"Track IDs: {sorted(tracking_df['track_id'].unique())}")
+    
+    # Display length of each track
+    for tid in sorted(tracking_df['track_id'].unique()):
+        track = tracking_df[tracking_df['track_id'] == tid]
+        frames = sorted(track['frame'].tolist())
+        print(f"  Track {tid}: frames {frames[0]}-{frames[-1]}, length={len(frames)}")
+    
+    # Gap closing
+    print("\n--- Gap Closing ---")
+    gap_closed_df = tracker.gap_closing(tracking_df, max_gap_frames=3, max_gap_distance=25)
+    print(f"Number of tracks after gap closing: {gap_closed_df['track_id'].nunique()}")
+    
+    # Display length of each track
+    for tid in sorted(gap_closed_df['track_id'].unique()):
+        track = gap_closed_df[gap_closed_df['track_id'] == tid]
+        frames = sorted(track['frame'].tolist())
+        interpolated = track[track['label'] == -1]
+        print(f"  Track {tid}: frames {frames[0]}-{frames[-1]}, length={len(frames)}, interpolated={len(interpolated)}")
+    
+    # Filtering
+    print("\n--- Filtering ---")
+    filtered_df = tracker.filter_tracks(gap_closed_df, min_length=5)
+    print(f"Number of tracks after filtering: {filtered_df['track_id'].nunique()}")
