@@ -74,7 +74,7 @@ def extract_intensity_features(nucs, cytos, imgs):
     Notes:
     ------
     Calculates mean intensities, area, and cytoplasmic/nuclear (C/N) ratio.
-    Drops rows with NaN values to ensure data quality.
+    Missing values are interpolated linearly for each label.
     """
     df = pd.DataFrame()
     for i, (nuc, cyto, img) in enumerate(zip(nucs, cytos, imgs)):
@@ -91,15 +91,24 @@ def extract_intensity_features(nucs, cytos, imgs):
             properties=['label', 'intensity_mean']
         ))
         prop2.columns = ['label', 'cyto_intensity']
-        prop2 = prop2.drop(columns=['label'])
         
-        prop = pd.concat([prop1, prop2], axis=1)
-        prop['time'] = np.full(len(prop), i)
+        # Merge on label to ensure correct alignment
+        prop = pd.merge(prop1, prop2, on='label', how='outer')
+        prop['time'] = i
         df = pd.concat([df, prop], axis=0)
     
     df['C/N'] = df['cyto_intensity'] / df['nuc_intensity']
-    df = df.dropna(how='any')
-    df['label'] = df['label'].values.astype('int')
+    df['label'] = df['label'].astype('int')
+    df = df.reset_index(drop=True)
+    
+    # Interpolate missing values for each label
+    df = df.sort_values(['label', 'time'])
+    df = df.groupby('label', group_keys=False).apply(
+        lambda x: x.set_index('time').reindex(
+            range(int(x['time'].min()), int(x['time'].max()) + 1)
+        ).interpolate(method='linear').reset_index().rename(columns={'index': 'time'})
+    )
+    df['label'] = df['label'].ffill().bfill().astype('int')
     df = df.reset_index(drop=True)
     
     return df
