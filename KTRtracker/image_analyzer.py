@@ -118,7 +118,7 @@ class ImageAnalyzer:
         )
         return self
     
-    def track_objects(self, min_track_length=None, max_linking_distance=None):
+    def track_objects(self, min_track_length=None, max_linking_distance=None, max_gap_frames=2, max_gap_distance=20):
         """
         Perform object tracking
         
@@ -143,10 +143,13 @@ class ImageAnalyzer:
         
         tracker = SimpleLAPTracker(
             max_linking_distance=link_distance, 
-            min_track_length=track_length
+            min_track_length=track_length,
+            max_gap_frames=None, 
+            max_gap_distance=None
         )
         
         self.tracking_df = tracker.track(self.segmentation_labels)
+        self.tracking_df = tracker.gap_closing(self.tracking_df)
         self.tracking_df = tracker.filter_tracks(self.tracking_df)
         
         return self
